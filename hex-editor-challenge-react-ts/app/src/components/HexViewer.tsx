@@ -1,41 +1,14 @@
-import React, {CSSProperties, useEffect, useState} from 'react';
+import React, {useEffect, useState} from 'react';
+import styles from '../assets/styles/HexViever.module.css';
 
 interface HexViewerProps {
   data: string | Uint8Array;
 }
 
-const ViewerBody: CSSProperties = {
-  marginTop: "10px",
-  padding: "10px",
-  border: "1px solid black",
-  borderRadius: "20px"
-}
-
-const ViewerLine: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 4fr 2fr",
-  marginTop: "20px",
-  paddingBottom: "5px",
-  borderBottom: "1px solid black"
-}
-
-const byteUnit: CSSProperties = {
-  marginRight: "5px",
-  whiteSpace: 'nowrap'
-}
-
-const offsetLine: CSSProperties = {
-  marginRight: "20px",
-  whiteSpace: 'nowrap'
-}
-
-const byteLine: CSSProperties = {
-  whiteSpace: 'nowrap'
-}
-
-const asciiLine: CSSProperties = {
-  marginLeft: "20px",
-  whiteSpace: 'nowrap'
+interface SelectedElement {
+  index: number | null,
+  offset: number | null,
+  value: number | string
 }
 
 function useCurrentWidth() {
@@ -48,9 +21,7 @@ function useCurrentWidth() {
       timeoutId = setTimeout(() => setWidth(window.innerWidth), 200);
     };
     window.addEventListener('resize', resizeListener);
-    return () => {
-      window.removeEventListener('resize', resizeListener);
-    }
+    return () => window.removeEventListener('resize', resizeListener);
   }, [])
 
   return width;
@@ -58,35 +29,59 @@ function useCurrentWidth() {
 
 export default function HexViewer(props: HexViewerProps) {
   const lines: React.ReactElement[] = [];
+  const [selectedElement, setSelectedElement] = useState<SelectedElement>({
+    index: null,
+    offset: null,
+    value: ''
+  });
   const isMobile = useCurrentWidth() < 578;
-  const BYTES_PER_LINE = isMobile ? 8 : 16;
+  const bytesPerLine = isMobile ? 8 : 16;
+
   const toHex = (n: string | number, l: number) => {
-    let result = typeof n === "string" ? Number(n.charCodeAt(0)).toString(16) : n.toString(16).padStart(l, '0');
-    return result.length === 1 ? '0' + result : result;
+    return typeof n === "string" ? Number(n.charCodeAt(0)).toString(16).padStart(l, '0') : n.toString(16).padStart(l, '0');
   };
 
-  for (let offset = 0; offset < props.data.length; offset += BYTES_PER_LINE) {
-    const slice = [...props.data.slice(offset, offset + BYTES_PER_LINE)];
+  const handleElementClick = function (index: number, offset: number, event: any) {
+    setSelectedElement({index, offset, value: event.target.innerText});
+  }
+
+  for (let offset = 0; offset < props.data.length; offset += bytesPerLine) {
+    const slice = [...props.data.slice(offset, offset + bytesPerLine)];
     const bytes = slice.map((byte, i) => {
-      return <span style={byteUnit} key={offset + i}>{toHex(byte, 2)}</span>
+      return <span
+        className={`${styles.byteUnit} ${selectedElement.index === i && selectedElement.offset === offset ? styles.selected : ''}`}
+        key={offset + i}
+        onClick={(e) => handleElementClick(i, offset, e)}>{toHex(byte, 2)}</span>
     });
-    const offsetComponent = <span style={offsetLine}>{toHex(offset, 8)}</span>
+
+    const offsetComponent = <span
+      className={styles.offsetLine}>{toHex(offset, 8)}</span>
     const bytesComponent = <div
-      style={byteLine}>{bytes.slice(0, 7)} {isMobile ? '' : bytes.slice(7)}</div>;
-    const asciiComponent = <span style={asciiLine}>| {
-      slice.map(byte => {
+      className={styles.byteLine}>{bytes.slice(0, 8)} {isMobile ? '' : bytes.slice(8)}</div>;
+    const asciiComponent = <div className={styles.asciiLine}>| {
+      slice.map((byte, i) => {
         if (typeof byte === "string") {
-          return byte;
+          return <span
+            key={offset + i}
+            className={`${selectedElement.index === i && selectedElement.offset === offset ? styles.selected : ''}`}
+            onClick={(e) => handleElementClick(i, offset, e)}>{byte}</span>;
         }
         if (byte >= 0x20 && byte < 0x7f) {
-          return String.fromCharCode(byte);
+          return <span
+            key={offset + i}
+            className={`${selectedElement.index === i && selectedElement.offset === offset ? styles.selected : ''}`}
+            onClick={(e) => handleElementClick(i, offset, e)}>{String.fromCharCode(byte)}</span>;
         }
-        return '.';
+        return <span
+          key={offset + i}
+          className={`${selectedElement.index === i && selectedElement.offset === offset ? styles.selected : ''}`}
+          onClick={(e) => handleElementClick(i, offset, e)}>.</span>;
       })
-    } |</span>
+    } |</div>
 
     lines.push(<div
-      style={ViewerLine}>{offsetComponent} {bytesComponent} {asciiComponent}</div>)
+      key={offset}
+      className={styles.viewerLine}>{offsetComponent} {bytesComponent} {asciiComponent}</div>)
   }
 
   return (
@@ -98,7 +93,31 @@ export default function HexViewer(props: HexViewerProps) {
       wordBreak: 'break-all'
     }}>
       <span style={{width: '100%'}}>Here comes the HexViewer</span>
-      <div style={ViewerBody}>{lines}</div>
+      <div className={styles.viewerBody}>{lines}</div>
+    <div style={{
+      display: 'flex',
+      width: '100%',
+      marginTop: '20px',
+      justifyContent: isMobile ? 'center' : 'flex-start',
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        marginTop: '20px',
+        marginRight: '20px',
+      }}>
+        <span>Copy selected to clipboard</span>
+        <button style={{
+          marginTop: '10px',
+          width: '100px',
+          padding: '10px'
+        }} onClick={() => {
+          navigator.clipboard.writeText(selectedElement.value.toString())
+        }}>Copy</button>
+      </div>
+    </div>
     </pre>
   );
 }
+
